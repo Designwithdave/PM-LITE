@@ -1,0 +1,298 @@
+import React, { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PlusCircle } from "lucide-react";
+import { motion } from "framer-motion";
+
+interface Task {
+  id: string;
+  title: string;
+  description: string;
+  status: "todo" | "in-progress" | "done";
+  assignee?: {
+    name: string;
+    avatar: string;
+  };
+}
+
+interface TaskBoardProps {
+  tasks?: Task[];
+  onTaskMove?: (taskId: string, newStatus: Task["status"]) => void;
+  onTaskClick?: (task: Task) => void;
+  onAddTask?: (task: Omit<Task, "id">) => void;
+  isLoading?: boolean;
+}
+
+const availableAssignees = [
+  { name: "Alice Smith", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice" },
+  { name: "Bob Johnson", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob" },
+  { name: "Carol Williams", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Carol" },
+  { name: "David Brown", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=David" },
+  { name: "Eve Davis", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Eve" },
+];
+
+const TaskBoard = ({
+  tasks = [],
+  onTaskMove = () => {},
+  onTaskClick = () => {},
+  onAddTask = () => {},
+  isLoading = false,
+}: TaskBoardProps) => {
+  const [loading, setLoading] = useState(isLoading);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [newTask, setNewTask] = useState({
+    title: "",
+    description: "",
+    status: "todo" as Task["status"],
+    assigneeName: "",
+  });
+  
+  useEffect(() => {
+    if (isLoading) {
+      setLoading(true);
+      const timer = setTimeout(() => {
+        setLoading(false);
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else {
+      setLoading(false);
+    }
+  }, [isLoading]);
+
+  const columns = [
+    { id: "todo", title: "To Do", color: "bg-gray-50", borderColor: "border-gray-200" },
+    { id: "in-progress", title: "In Progress", color: "bg-blue-50", borderColor: "border-blue-100" },
+    { id: "done", title: "Done", color: "bg-green-50", borderColor: "border-green-100" },
+  ];
+
+  const handleDragStart = (e: React.DragEvent, taskId: string) => {
+    e.dataTransfer.setData("taskId", taskId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, status: Task["status"]) => {
+    e.preventDefault();
+    const taskId = e.dataTransfer.getData("taskId");
+    onTaskMove(taskId, status);
+  };
+
+  const handleSubmitTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTask.title.trim()) return;
+
+    const assignee = availableAssignees.find(a => a.name === newTask.assigneeName);
+    
+    onAddTask({
+      title: newTask.title,
+      description: newTask.description,
+      status: newTask.status,
+      assignee: assignee || undefined,
+    });
+
+    setNewTask({
+      title: "",
+      description: "",
+      status: "todo",
+      assigneeName: "",
+    });
+    setIsDialogOpen(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full h-full bg-white/90 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-gray-100">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-semibold text-gray-900">Task Board</h2>
+          <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors opacity-50 cursor-not-allowed">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Add Task
+          </Button>
+        </div>
+        
+        <div className="grid grid-cols-3 gap-6 h-[calc(100%-4rem)]">
+          {columns.map((column) => (
+            <div
+              key={column.id}
+              className={`${column.color} rounded-xl p-4 border ${column.borderColor}`}
+            >
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center">
+                <span className={`h-2 w-2 rounded-full mr-2 ${column.id === 'todo' ? 'bg-gray-400' : column.id === 'in-progress' ? 'bg-blue-400' : 'bg-green-400'}`}></span>
+                {column.title}
+              </h3>
+              <div className="space-y-3 flex flex-col items-center justify-center min-h-[200px]">
+                <div className="relative">
+                  <div className="h-10 w-10 rounded-full border-4 border-gray-100 border-t-blue-500 animate-spin" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-blue-500/20 animate-pulse" />
+                  </div>
+                </div>
+                <p className="text-sm font-medium text-gray-500 mt-3">Loading tasks...</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  
+  return (
+    <div className="w-full h-full bg-white/90 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-gray-100">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-semibold text-gray-900">Task Board</h2>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm transition-colors">
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add Task
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Add New Task</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmitTask} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Task Title</Label>
+                <Input
+                  id="title"
+                  placeholder="Enter task title"
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Enter task description"
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  rows={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={newTask.status}
+                  onValueChange={(value) => setNewTask({ ...newTask, status: value as Task["status"] })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in-progress">In Progress</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="assignee">Assignee (Optional)</Label>
+                <Select
+                  value={newTask.assigneeName}
+                  onValueChange={(value) => setNewTask({ ...newTask, assigneeName: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select assignee" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableAssignees.map((assignee) => (
+                      <SelectItem key={assignee.name} value={assignee.name}>
+                        {assignee.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-3 pt-4">
+                <Button type="submit" className="flex-1">
+                  Add Task
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid grid-cols-3 gap-6 h-[calc(100%-4rem)]">
+        {columns.map((column) => (
+          <div
+            key={column.id}
+            className={`${column.color} rounded-xl p-4 border ${column.borderColor}`}
+            onDragOver={handleDragOver}
+            onDrop={(e) => handleDrop(e, column.id as Task["status"])}
+          >
+            <h3 className="font-medium text-gray-900 mb-4 flex items-center">
+              <span className={`h-2 w-2 rounded-full mr-2 ${column.id === 'todo' ? 'bg-gray-400' : column.id === 'in-progress' ? 'bg-blue-400' : 'bg-green-400'}`}></span>
+              {column.title}
+            </h3>
+            <div className="space-y-3">
+              {tasks
+                .filter((task) => task.status === column.id)
+                .map((task) => (
+                  <motion.div
+                    key={task.id}
+                    layoutId={task.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e as any, task.id)}
+                    onClick={() => onTaskClick(task)}
+                  >
+                    <Card className="p-4 cursor-pointer hover:shadow-md transition-all duration-200 rounded-xl border-0 bg-white shadow-sm">
+                      <h4 className="font-medium text-gray-900 mb-2">
+                        {task.title}
+                      </h4>
+                      <p className="text-sm text-gray-600 mb-3">
+                        {task.description}
+                      </p>
+                      {task.assignee && (
+                        <div className="flex items-center mt-3 pt-3 border-t border-gray-100">
+                          <img
+                            src={task.assignee.avatar}
+                            alt={task.assignee.name}
+                            className="w-7 h-7 rounded-full mr-2 border border-white shadow-sm"
+                          />
+                          <span className="text-sm text-gray-700 font-medium">
+                            {task.assignee.name}
+                          </span>
+                        </div>
+                      )}
+                    </Card>
+                  </motion.div>
+                ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default TaskBoard;
