@@ -2,11 +2,11 @@ import React, { useState } from "react";
 import TopNavigation from "../dashboard/layout/TopNavigation";
 import Sidebar from "../dashboard/layout/Sidebar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -15,13 +15,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, ChevronRight, PlusCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CalendarEvent {
@@ -65,6 +75,9 @@ const CalendarPage = () => {
   ]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEventDetailsOpen, setIsEventDetailsOpen] = useState(false);
+  const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [newEvent, setNewEvent] = useState({
     title: "",
@@ -150,6 +163,25 @@ const CalendarPage = () => {
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+  const handleEventClick = (event: CalendarEvent, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedEvent(event);
+    setIsEventDetailsOpen(true);
+  };
+
+  const handleDeleteClick = () => {
+    setIsDeleteAlertOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (selectedEvent) {
+      setEvents(events.filter(e => e.id !== selectedEvent.id));
+      setIsDeleteAlertOpen(false);
+      setIsEventDetailsOpen(false);
+      setSelectedEvent(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f5f7]">
       <TopNavigation />
@@ -165,7 +197,7 @@ const CalendarPage = () => {
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                   <Button className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm">
-                    <PlusCircle className="mr-2 h-4 w-4" />
+                    <Plus className="mr-2 h-4 w-4" />
                     New Event
                   </Button>
                 </DialogTrigger>
@@ -323,8 +355,9 @@ const CalendarPage = () => {
                           {dayEvents.slice(0, 2).map((event) => (
                             <div
                               key={event.id}
+                              onClick={(e) => handleEventClick(event, e)}
                               className={cn(
-                                "text-xs px-1 py-0.5 rounded text-white truncate",
+                                "text-xs px-1 py-0.5 rounded text-white truncate hover:opacity-80 transition-opacity",
                                 eventColors[event.type]
                               )}
                             >
@@ -355,7 +388,8 @@ const CalendarPage = () => {
                     .map((event) => (
                       <div
                         key={event.id}
-                        className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50"
+                        onClick={(e) => handleEventClick(event, e)}
+                        className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 cursor-pointer"
                       >
                         <div className={cn("w-1 h-full rounded", eventColors[event.type])} />
                         <div className="flex-1">
@@ -388,6 +422,98 @@ const CalendarPage = () => {
           </div>
         </main>
       </div>
+
+      {/* Event Details Dialog */}
+      <Dialog open={isEventDetailsOpen} onOpenChange={setIsEventDetailsOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Event Details</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-4 mt-4">
+              <div>
+                <Label className="text-gray-600">Title</Label>
+                <p className="text-lg font-semibold text-gray-900 mt-1">{selectedEvent.title}</p>
+              </div>
+              
+              <div>
+                <Label className="text-gray-600">Description</Label>
+                <p className="text-gray-900 mt-1">{selectedEvent.description || "No description"}</p>
+              </div>
+
+              <div>
+                <Label className="text-gray-600">Type</Label>
+                <div className="mt-1">
+                  <Badge className={cn("text-white", eventColors[selectedEvent.type])}>
+                    {selectedEvent.type}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-gray-600">Date</Label>
+                  <p className="text-gray-900 mt-1">
+                    {new Date(selectedEvent.date).toLocaleDateString('en-US', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                  </p>
+                </div>
+                
+                {selectedEvent.startTime && selectedEvent.endTime && (
+                  <div>
+                    <Label className="text-gray-600">Time</Label>
+                    <p className="text-gray-900 mt-1">
+                      {selectedEvent.startTime} - {selectedEvent.endTime}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t">
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteClick}
+                  className="flex-1"
+                >
+                  Delete Event
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEventDetailsOpen(false)}
+                  className="flex-1"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the event "{selectedEvent?.title}". This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

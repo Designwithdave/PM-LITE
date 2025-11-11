@@ -40,8 +40,13 @@ export default function ExpenseList({ expenses, onEdit, onDelete }: ExpenseListP
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
+  // Calculate dynamic height: show max 5 items before scrolling
+  const itemHeight = 110; // Approximate height per expense item
+  const visibleItems = Math.min(expenses.length, 5);
+  const calculatedHeight = visibleItems * itemHeight;
+
   return (
-    <ScrollArea className="h-[600px] pr-4">
+    <ScrollArea className="pr-4" style={{ height: `${calculatedHeight}px` }}>
       <div className="space-y-3">
         {sortedExpenses.map((expense) => (
           <Card key={expense.id} className="hover:shadow-md transition-shadow">

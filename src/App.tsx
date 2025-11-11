@@ -1,18 +1,19 @@
 import { Suspense } from "react";
-import { Navigate, Route, Routes, useRoutes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useRoutes } from "react-router-dom";
 import routes from "tempo-routes";
 import LoginForm from "./components/auth/LoginForm";
 import SignUpForm from "./components/auth/SignUpForm";
 import Dashboard from "./components/pages/dashboard";
 import Success from "./components/pages/success";
-import Home from "./components/pages/home";
-import Expenses from "./components/pages/expenses";
+import Profile from "./components/pages/profile";
 import Calendar from "./components/pages/calendar";
 import Projects from "./components/pages/projects";
 import Team from "./components/pages/team";
+import Expenses from "./components/pages/expenses";
 import { AuthProvider, useAuth } from "../supabase/auth";
 import { Toaster } from "./components/ui/toaster";
 import { LoadingScreen, LoadingSpinner } from "./components/ui/loading-spinner";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -29,10 +30,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  const tempoRoutes = useRoutes(routes);
+  
   return (
     <>
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<Navigate to="/expenses" replace />} />
         <Route path="/login" element={<LoginForm />} />
         <Route path="/signup" element={<SignUpForm />} />
         <Route
@@ -43,11 +46,20 @@ function AppRoutes() {
             </PrivateRoute>
           }
         />
+        <Route path="/expenses" element={<Expenses />} />
         <Route
-          path="/expenses"
+          path="/profile"
           element={
             <PrivateRoute>
-              <Expenses />
+              <Profile />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <PrivateRoute>
+              <Profile />
             </PrivateRoute>
           }
         />
@@ -80,19 +92,21 @@ function AppRoutes() {
           element={<Success />}
         />
       </Routes>
-      {import.meta.env.VITE_TEMPO === "true" && useRoutes(routes)}
+      {import.meta.env.VITE_TEMPO === "true" && tempoRoutes}
     </>
   );
 }
 
 function App() {
   return (
-    <AuthProvider>
-      <Suspense fallback={<LoadingScreen text="Loading application..." />}>
-        <AppRoutes />
-      </Suspense>
-      <Toaster />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <ThemeProvider>
+          <AppRoutes />
+          <Toaster />
+        </ThemeProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
 

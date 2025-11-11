@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
-import { Plus, LogOut } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "../../../supabase/supabase";
-import { useAuth } from "../../../supabase/auth";
+import React, { useState, useEffect, useCallback } from "react";
+import TopNavigation from "../dashboard/layout/TopNavigation";
+import Sidebar from "../dashboard/layout/Sidebar";
+import ExpenseList from "../expenses/ExpenseList";
+import ExpenseSummary from "../expenses/ExpenseSummary";
+import ExpenseForm from "../expenses/ExpenseForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,65 +13,73 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Plus, DollarSign } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import ExpenseForm from "@/components/expenses/ExpenseForm";
-import ExpenseList from "@/components/expenses/ExpenseList";
-import ExpenseSummary from "@/components/expenses/ExpenseSummary";
 import type { Expense } from "@/types/expense";
 
-export default function ExpensesPage() {
+const STORAGE_KEY = "expense-tracker-expenses";
+
+const ExpensesPage = () => {
+  const { toast } = useToast();
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
 
-  const fetchExpenses = useCallback(async () => {
-    if (!user?.id) {
-      setLoading(false);
-      return;
-    }
-
+  // Load expenses from localStorage
+  const fetchExpenses = useCallback(() => {
     try {
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false });
-
-      if (error) throw error;
-      setExpenses(data || []);
+      setLoading(true);
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setExpenses(parsed);
+      }
     } catch (error) {
-      console.error("Error fetching expenses:", error);
+      console.error("Error loading expenses:", error);
       toast({
         title: "Error",
-        description: "Failed to load expenses",
+        description: "Failed to load expenses from storage",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  }, [user?.id, toast]);
+  }, [toast]);
+
+  // Save expenses to localStorage
+  const saveExpenses = useCallback((expensesToSave: Expense[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(expensesToSave));
+    } catch (error) {
+      console.error("Error saving expenses:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save expenses",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
 
   useEffect(() => {
     fetchExpenses();
   }, [fetchExpenses]);
 
   const handleAddExpense = async (
-    expenseData: Omit<Expense, "id" | "user_id" | "created_at" | "updated_at">
+    expenseData: Omit<Expense, "id" | "user_id" | "created_at" | "updated_at">,
   ) => {
     try {
-      const { data, error } = await supabase
-        .from("expenses")
-        .insert([{ ...expenseData, user_id: user?.id }])
-        .select()
-        .single();
+      const newExpense: Expense = {
+        ...expenseData,
+        id: crypto.randomUUID(),
+        user_id: "local",
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
 
-      if (error) throw error;
-
-      setExpenses([data, ...expenses]);
+      const updatedExpenses = [newExpense, ...expenses];
+      setExpenses(updatedExpenses);
+      saveExpenses(updatedExpenses);
       setIsDialogOpen(false);
       toast({
         title: "Success",
@@ -87,23 +96,22 @@ export default function ExpensesPage() {
   };
 
   const handleUpdateExpense = async (
-    expenseData: Omit<Expense, "id" | "user_id" | "created_at" | "updated_at">
+    expenseData: Omit<Expense, "id" | "user_id" | "created_at" | "updated_at">,
   ) => {
     if (!editingExpense) return;
 
     try {
-      const { data, error } = await supabase
-        .from("expenses")
-        .update({ ...expenseData, updated_at: new Date().toISOString() })
-        .eq("id", editingExpense.id)
-        .select()
-        .single();
+      const updatedExpense: Expense = {
+        ...editingExpense,
+        ...expenseData,
+        updated_at: new Date().toISOString(),
+      };
 
-      if (error) throw error;
-
-      setExpenses(
-        expenses.map((exp) => (exp.id === editingExpense.id ? data : exp))
+      const updatedExpenses = expenses.map((exp) =>
+        exp.id === editingExpense.id ? updatedExpense : exp
       );
+      setExpenses(updatedExpenses);
+      saveExpenses(updatedExpenses);
       setEditingExpense(null);
       setIsDialogOpen(false);
       toast({
@@ -122,11 +130,9 @@ export default function ExpensesPage() {
 
   const handleDeleteExpense = async (id: string) => {
     try {
-      const { error } = await supabase.from("expenses").delete().eq("id", id);
-
-      if (error) throw error;
-
-      setExpenses(expenses.filter((exp) => exp.id !== id));
+      const updatedExpenses = expenses.filter((exp) => exp.id !== id);
+      setExpenses(updatedExpenses);
+      saveExpenses(updatedExpenses);
       toast({
         title: "Success",
         description: "Expense deleted successfully",
@@ -141,7 +147,7 @@ export default function ExpensesPage() {
     }
   };
 
-  const handleEdit = (expense: Expense) => {
+  const handleEditExpense = (expense: Expense) => {
     setEditingExpense(expense);
     setIsDialogOpen(true);
   };
@@ -151,92 +157,80 @@ export default function ExpensesPage() {
     setEditingExpense(null);
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/");
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">💰</div>
-          <p className="text-muted-foreground">Loading expenses...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
-      <div className="container max-w-7xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-4xl font-bold mb-2">Expense Tracker</h1>
-            <p className="text-muted-foreground">
-              Track and manage your daily expenses
-            </p>
-          </div>
-          <Button variant="outline" onClick={handleSignOut}>
-            <LogOut className="mr-2 h-4 w-4" />
-            Sign Out
-          </Button>
-        </div>
+    <div className="min-h-screen bg-[#f5f5f7]">
+      <TopNavigation />
+      <div className="flex h-[calc(100vh-64px)] mt-16">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto p-6 space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+                  <DollarSign className="h-8 w-8 text-green-600" />
+                  My Expenses
+                </h1>
+                <p className="text-gray-600 mt-1">
+                  Track and manage your daily expenses
+                </p>
+              </div>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    className="bg-blue-500 hover:bg-blue-600 text-white rounded-full px-4 h-9 shadow-sm"
+                    onClick={() => setEditingExpense(null)}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Expense
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingExpense ? "Edit Expense" : "Add New Expense"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <ExpenseForm
+                    onSubmit={
+                      editingExpense ? handleUpdateExpense : handleAddExpense
+                    }
+                    initialData={editingExpense || undefined}
+                    onCancel={handleDialogClose}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Add Expense
-                  <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" onClick={() => setEditingExpense(null)}>
-                        <Plus className="h-4 w-4 mr-1" />
-                        New
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[500px]">
-                      <DialogHeader>
-                        <DialogTitle>
-                          {editingExpense ? "Edit Expense" : "Add New Expense"}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <ExpenseForm
-                        onSubmit={
-                          editingExpense ? handleUpdateExpense : handleAddExpense
-                        }
-                        initialData={editingExpense || undefined}
-                        onCancel={handleDialogClose}
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1">
+                <ExpenseSummary expenses={expenses} />
+              </div>
+              <div className="lg:col-span-2">
+                <Card className="bg-white shadow-sm">
+                  <CardHeader>
+                    <CardTitle>All Expenses</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {loading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                      </div>
+                    ) : (
+                      <ExpenseList
+                        expenses={expenses}
+                        onEdit={handleEditExpense}
+                        onDelete={handleDeleteExpense}
                       />
-                    </DialogContent>
-                  </Dialog>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ExpenseForm onSubmit={handleAddExpense} />
-              </CardContent>
-            </Card>
-
-            <ExpenseSummary expenses={expenses} />
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
           </div>
-
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Recent Expenses</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ExpenseList
-                  expenses={expenses}
-                  onEdit={handleEdit}
-                  onDelete={handleDeleteExpense}
-                />
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+        </main>
       </div>
     </div>
   );
-}
+};
+
+export default ExpensesPage;

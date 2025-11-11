@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, GripVertical } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface Task {
@@ -40,6 +40,8 @@ interface TaskBoardProps {
   isLoading?: boolean;
 }
 
+const STORAGE_KEY = "taskboard_tasks";
+
 const availableAssignees = [
   { name: "Alice Smith", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Alice" },
   { name: "Bob Johnson", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Bob" },
@@ -48,14 +50,33 @@ const availableAssignees = [
   { name: "Eve Davis", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Eve" },
 ];
 
-const TaskBoard = ({
-  tasks = [],
-  onTaskMove = () => {},
-  onTaskClick = () => {},
-  onAddTask = () => {},
-  isLoading = false,
-}: TaskBoardProps) => {
-  const [loading, setLoading] = useState(isLoading);
+const defaultTasks: Task[] = [
+  {
+    id: "1",
+    title: "Design new landing page",
+    description: "Create mockups for the new landing page design",
+    status: "in-progress",
+    assignee: availableAssignees[0],
+  },
+  {
+    id: "2",
+    title: "Implement authentication",
+    description: "Set up user authentication with OAuth",
+    status: "todo",
+    assignee: availableAssignees[1],
+  },
+  {
+    id: "3",
+    title: "Write documentation",
+    description: "Document the API endpoints",
+    status: "done",
+    assignee: availableAssignees[2],
+  },
+];
+
+const TaskBoard = (props: TaskBoardProps) => {
+  const [localTasks, setLocalTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(props.isLoading || false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [newTask, setNewTask] = useState({
     title: "",
@@ -63,9 +84,31 @@ const TaskBoard = ({
     status: "todo" as Task["status"],
     assigneeName: "",
   });
-  
+
+  // Load tasks from localStorage on mount
   useEffect(() => {
-    if (isLoading) {
+    const savedTasks = localStorage.getItem(STORAGE_KEY);
+    if (savedTasks) {
+      try {
+        setLocalTasks(JSON.parse(savedTasks));
+      } catch (error) {
+        console.error("Failed to parse saved tasks:", error);
+        setLocalTasks(props.tasks || defaultTasks);
+      }
+    } else {
+      setLocalTasks(props.tasks || defaultTasks);
+    }
+  }, []);
+
+  // Save tasks to localStorage whenever they change
+  useEffect(() => {
+    if (localTasks.length > 0) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(localTasks));
+    }
+  }, [localTasks]);
+
+  useEffect(() => {
+    if (props.isLoading) {
       setLoading(true);
       const timer = setTimeout(() => {
         setLoading(false);
@@ -74,7 +117,9 @@ const TaskBoard = ({
     } else {
       setLoading(false);
     }
-  }, [isLoading]);
+  }, [props.isLoading]);
+
+  const tasks = localTasks;
 
   const columns = [
     { id: "todo", title: "To Do", color: "bg-gray-50", borderColor: "border-gray-200" },
@@ -93,7 +138,16 @@ const TaskBoard = ({
   const handleDrop = (e: React.DragEvent, status: Task["status"]) => {
     e.preventDefault();
     const taskId = e.dataTransfer.getData("taskId");
-    onTaskMove(taskId, status);
+    
+    setLocalTasks(prevTasks => 
+      prevTasks.map(task => 
+        task.id === taskId ? { ...task, status } : task
+      )
+    );
+
+    if (props.onTaskMove) {
+      props.onTaskMove(taskId, status);
+    }
   };
 
   const handleSubmitTask = (e: React.FormEvent) => {
@@ -102,12 +156,24 @@ const TaskBoard = ({
 
     const assignee = availableAssignees.find(a => a.name === newTask.assigneeName);
     
-    onAddTask({
+    const taskToAdd: Task = {
+      id: Date.now().toString(),
       title: newTask.title,
       description: newTask.description,
       status: newTask.status,
       assignee: assignee || undefined,
-    });
+    };
+
+    setLocalTasks(prevTasks => [...prevTasks, taskToAdd]);
+
+    if (props.onAddTask) {
+      props.onAddTask({
+        title: newTask.title,
+        description: newTask.description,
+        status: newTask.status,
+        assignee: assignee || undefined,
+      });
+    }
 
     setNewTask({
       title: "",
@@ -116,6 +182,12 @@ const TaskBoard = ({
       assigneeName: "",
     });
     setIsDialogOpen(false);
+  };
+
+  const handleTaskClick = (task: Task) => {
+    if (props.onTaskClick) {
+      props.onTaskClick(task);
+    }
   };
 
   if (loading) {
@@ -263,27 +335,32 @@ const TaskBoard = ({
                     layoutId={task.id}
                     draggable
                     onDragStart={(e) => handleDragStart(e as any, task.id)}
-                    onClick={() => onTaskClick(task)}
+                    onClick={() => handleTaskClick(task)}
                   >
                     <Card className="p-4 cursor-pointer hover:shadow-md transition-all duration-200 rounded-xl border-0 bg-white shadow-sm">
-                      <h4 className="font-medium text-gray-900 mb-2">
-                        {task.title}
-                      </h4>
-                      <p className="text-sm text-gray-600 mb-3">
-                        {task.description}
-                      </p>
-                      {task.assignee && (
-                        <div className="flex items-center mt-3 pt-3 border-t border-gray-100">
-                          <img
-                            src={task.assignee.avatar}
-                            alt={task.assignee.name}
-                            className="w-7 h-7 rounded-full mr-2 border border-white shadow-sm"
-                          />
-                          <span className="text-sm text-gray-700 font-medium">
-                            {task.assignee.name}
-                          </span>
+                      <div className="flex items-start gap-2">
+                        <GripVertical className="h-5 w-5 text-gray-400 flex-shrink-0 mt-0.5 cursor-grab active:cursor-grabbing" />
+                        <div className="flex-1">
+                          <h4 className="font-medium text-gray-900 mb-2">
+                            {task.title}
+                          </h4>
+                          <p className="text-sm text-gray-600 mb-3">
+                            {task.description}
+                          </p>
+                          {task.assignee && (
+                            <div className="flex items-center mt-3 pt-3 border-t border-gray-100">
+                              <img
+                                src={task.assignee.avatar}
+                                alt={task.assignee.name}
+                                className="w-7 h-7 rounded-full mr-2 border border-white shadow-sm"
+                              />
+                              <span className="text-sm text-gray-700 font-medium">
+                                {task.assignee.name}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      )}
+                      </div>
                     </Card>
                   </motion.div>
                 ))}

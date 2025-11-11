@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
-  Home,
   LayoutDashboard,
   Calendar,
   Users,
@@ -27,7 +26,6 @@ interface SidebarProps {
 }
 
 const defaultNavItems: NavItem[] = [
-  { icon: <Home size={20} />, label: "Home", href: "/" },
   { icon: <LayoutDashboard size={20} />, label: "Dashboard", href: "/dashboard" },
   { icon: <FolderKanban size={20} />, label: "Projects", href: "/projects" },
   { icon: <Calendar size={20} />, label: "Calendar", href: "/calendar" },

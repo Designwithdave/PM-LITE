@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlusCircle, Mail, Users as UsersIcon } from "lucide-react";
+import { supabase } from "../../../supabase/supabase";
+import { useToast } from "@/components/ui/use-toast";
 
 interface TeamMember {
   id: string;
@@ -40,6 +42,7 @@ const statusColors = {
 };
 
 const TeamPage = () => {
+  const { toast } = useToast();
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
     {
       id: "1",
@@ -89,6 +92,7 @@ const TeamPage = () => {
   ]);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [newMember, setNewMember] = useState({
     name: "",
     email: "",
@@ -96,25 +100,64 @@ const TeamPage = () => {
     department: "",
   });
 
-  const handleAddMember = (e: React.FormEvent) => {
+  const handleAddMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMember.name.trim() || !newMember.email.trim()) return;
 
-    const member: TeamMember = {
-      id: Date.now().toString(),
-      ...newMember,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newMember.name}`,
-      status: "active",
-    };
+    setIsSendingInvite(true);
 
-    setTeamMembers([...teamMembers, member]);
-    setNewMember({
-      name: "",
-      email: "",
-      role: "",
-      department: "",
-    });
-    setIsDialogOpen(false);
+    try {
+      // Send email invite via Supabase Edge Function
+      const { data, error } = await supabase.functions.invoke('supabase-functions-send-team-invite', {
+        body: {
+          email: newMember.email,
+          name: newMember.name,
+          role: newMember.role,
+          department: newMember.department,
+          inviterName: 'Your Team Admin', // You can replace this with actual user name
+        },
+      });
+
+      if (error) {
+        console.error('Error sending invite:', error);
+        toast({
+          title: "Error",
+          description: "Failed to send invitation email. Member added to team.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Invitation Sent!",
+          description: `An email invitation has been sent to ${newMember.email}`,
+        });
+      }
+
+      // Add member to the team list
+      const member: TeamMember = {
+        id: Date.now().toString(),
+        ...newMember,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newMember.name}`,
+        status: "active",
+      };
+
+      setTeamMembers([...teamMembers, member]);
+      setNewMember({
+        name: "",
+        email: "",
+        role: "",
+        department: "",
+      });
+      setIsDialogOpen(false);
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSendingInvite(false);
+    }
   };
 
   const departments = Array.from(new Set(teamMembers.map((m) => m.department))).filter(Boolean);
@@ -158,6 +201,7 @@ const TeamPage = () => {
                         value={newMember.name}
                         onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
                         required
+                        disabled={isSendingInvite}
                       />
                     </div>
                     <div className="space-y-2">
@@ -169,6 +213,7 @@ const TeamPage = () => {
                         value={newMember.email}
                         onChange={(e) => setNewMember({ ...newMember, email: e.target.value })}
                         required
+                        disabled={isSendingInvite}
                       />
                     </div>
                     <div className="space-y-2">
@@ -178,6 +223,7 @@ const TeamPage = () => {
                         placeholder="e.g. Product Designer"
                         value={newMember.role}
                         onChange={(e) => setNewMember({ ...newMember, role: e.target.value })}
+                        disabled={isSendingInvite}
                       />
                     </div>
                     <div className="space-y-2">
@@ -185,6 +231,7 @@ const TeamPage = () => {
                       <Select
                         value={newMember.department}
                         onValueChange={(value) => setNewMember({ ...newMember, department: value })}
+                        disabled={isSendingInvite}
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Select department" />
@@ -199,13 +246,24 @@ const TeamPage = () => {
                       </Select>
                     </div>
                     <div className="flex gap-3 pt-4">
-                      <Button type="submit" className="flex-1">
-                        Add Member
+                      <Button type="submit" className="flex-1" disabled={isSendingInvite}>
+                        {isSendingInvite ? (
+                          <>
+                            <Mail className="mr-2 h-4 w-4 animate-pulse" />
+                            Sending Invite...
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="mr-2 h-4 w-4" />
+                            Send Invite
+                          </>
+                        )}
                       </Button>
                       <Button
                         type="button"
                         variant="outline"
                         onClick={() => setIsDialogOpen(false)}
+                        disabled={isSendingInvite}
                       >
                         Cancel
                       </Button>
